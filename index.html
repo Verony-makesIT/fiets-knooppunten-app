@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
     <style>
+        /* Standaard styling voor PC (simuleert smartphone) */
         body {
             font-family: Arial, sans-serif;
             background-color: #e0e0e0;
@@ -34,6 +35,7 @@
             position: relative;
         }
 
+        /* Verberg de namaak statusbalk op een echte telefoon */
         .phone-status-bar {
             background-color: #1a1a1a;
             color: white;
@@ -44,6 +46,26 @@
             align-items: center;
         }
 
+        /* RESPONSIVE STYLING VOOR ECHTE SMARTPHONES */
+        @media screen and (max-width: 600px) {
+            body {
+                padding: 0;
+                background-color: #ffffff;
+            }
+
+            .smartphone {
+                width: 100vw;       /* 100% van de schermbreedte */
+                height: 100vh;      /* 100% van de schermhoogte */
+                border: none;       /* Haalt de dikke zwarte rand weg */
+                border-radius: 0;   /* Haalt de afgeronde hoeken van het frame weg */
+                box-shadow: none;
+            }
+
+            /* Verberg de nagemaakte statusbalk (de telefoon heeft er al een) */
+            .phone-status-bar {
+                display: none;
+            }
+        }
         .app-content {
             flex: 1;
             display: flex;
