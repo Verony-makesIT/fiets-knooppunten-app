@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Fiets Knooppunten Opvolger</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2e7d32">
@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
     <style>
-        /* Standaard styling voor PC (simuleert smartphone) */
+        /* Standaard voor PC (gesimuleerde smartphone) */
         body {
             font-family: Arial, sans-serif;
             background-color: #e0e0e0;
@@ -35,7 +35,6 @@
             position: relative;
         }
 
-        /* Verberg de namaak statusbalk op een echte telefoon */
         .phone-status-bar {
             background-color: #1a1a1a;
             color: white;
@@ -46,26 +45,30 @@
             align-items: center;
         }
 
-        /* RESPONSIVE STYLING VOOR ECHTE SMARTPHONES */
-        @media screen and (max-width: 600px) {
-            body {
-                padding: 0;
-                background-color: #ffffff;
+        /* VOLLEDIG SCHERM OP SMARTPHONES */
+        @media screen and (max-width: 768px) {
+            html, body {
+                padding: 0 !important;
+                margin: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                background-color: #ffffff !important;
+                overflow: hidden;
             }
 
             .smartphone {
-                width: 100vw;       /* 100% van de schermbreedte */
-                height: 100vh;      /* 100% van de schermhoogte */
-                border: none;       /* Haalt de dikke zwarte rand weg */
-                border-radius: 0;   /* Haalt de afgeronde hoeken van het frame weg */
-                box-shadow: none;
+                width: 100vw !important;
+                height: 100vh !important;
+                border: none !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
             }
 
-            /* Verberg de nagemaakte statusbalk (de telefoon heeft er al een) */
             .phone-status-bar {
-                display: none;
+                display: none !important; /* Verberg nagemaakte statusbalk op echte gsm */
             }
-        }
+        }       
+        
         .app-content {
             flex: 1;
             display: flex;
@@ -500,6 +503,7 @@
     let currentIndex = 0;
     let isFinished = false;
     let isPaused = false;
+    let isDemoMode = false; // Houdt bij of we in demo-modus zitten
     let watchId = null;
     let currentPos = { lat: 51.0850, lon: 5.5100 };
     let spokenNearCurrent = false;
@@ -546,6 +550,8 @@
     }
 
     function handleFileUpload() {
+        isDemoMode = false; // Eigen GPX is geüpload, geen demo
+
         const fileInput = document.getElementById('gpxFile');
         const errorAlert = document.getElementById('error-alert');
         
@@ -578,6 +584,7 @@
     }
 
     function loadDemoRoute() {
+        isDemoMode = true; // Activeer demo-modus
         document.getElementById('error-alert').style.display = 'none';
         document.getElementById('route-title').innerText = "Fietstocht: Eerbetoon aan Hugo Bollen";
         
@@ -675,10 +682,12 @@
         document.getElementById('screen-tracking').classList.add('active');
         
         const simBox = document.getElementById('sim-controls-box');
-        if (isMobileDevice()) {
-            if (simBox) simBox.style.display = 'none';
-        } else {
+        
+        // Toon simulatieknoppen op PC óf als de gebruiker de Demo-modus gekozen heeft op gsm
+        if (!isMobileDevice() || isDemoMode) {
             if (simBox) simBox.style.display = 'block';
+        } else {
+            if (simBox) simBox.style.display = 'none';
         }
 
         isPaused = false;
