@@ -48,6 +48,15 @@ De app is live te gebruiken via GitHub Pages:
 
 ---
 
+## 🔒 Privacy & Locatievoorzieningen (GPS)
+
+Wanneer je de app voor het eerst opent, zal de browser om toestemming vragen voor je **locatievoorzieningen (GPS)**. 
+
+* **Waarom vereist?** De app gebruikt de *Geolocation API* om live te bepalen waar je fietst, de afstand tot het volgende knooppunt te berekenen en de gesproken instructies op het juiste moment af te spelen.
+* **Privacy:** Alle GPS-data wordt uitsluitend lokaal op je smartphone verwerkt en wordt **nooit** opgeslagen of gedeeld met externe servers.
+
+---
+
 ## 🏛️ Eerbetoon
 
 Deze app is geïnspireerd door het baanbrekende werk van **Hugo Bollen**, die in 1995 in Belgisch Limburg het allereerste fietsknooppuntennetwerk ter wereld ontwierp, geïnspireerd door de ondergrondse bewegwijzering in de steenkoolmijnen.
