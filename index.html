@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fiets Knooppunten Opvolger</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2e7d32">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .smartphone {
+            width: 380px;
+            height: 760px;
+            background-color: #ffffff;
+            border: 14px solid #2b2b2b;
+            border-radius: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .phone-status-bar {
+            background-color: #1a1a1a;
+            color: white;
+            padding: 5px 15px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .app-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            overflow-y: auto;
+            box-sizing: border-box;
+            background-color: #f8f9fa;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #333;
+            text-align: center;
+        }
+
+        .screen {
+            display: none;
+            flex-direction: column;
+            flex: 1;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        .btn {
+            background-color: #2e7d32;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 0;
+            width: 100%;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            background-color: #1b5e20;
+        }
+
+        .btn-secondary {
+            background-color: #1976d2;
+        }
+        .btn-secondary:hover {
+            background-color: #0d47a1;
+        }
+
+        /* Container voor de onderste bedieningsknoppen */
+        .bottom-controls-container {
+            margin-top: auto;
+            padding-top: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        /* "Wist je dat?" knop over de volle breedte */
+        .btn-full-poi {
+            width: 100%;
+            background-color: #e3f2fd;
+            color: #0d47a1;
+            border: 1px solid #90caf9;
+            padding: 8px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            text-align: center;
+            box-sizing: border-box;
+            display: none; /* Verschijnt pas bij finish */
+            transition: all 0.2s ease;
+            line-height: 1.3;
+        }
+        .btn-full-poi:hover {
+            background-color: #bbdefb;
+        }
+
+        .discrete-action-bar {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-discrete {
+            flex: 1;
+            background-color: #f0f0f0;
+            color: #444;
+            border: 1px solid #ccc;
+            padding: 7px 8px;
+            font-size: 11px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .btn-discrete:hover {
+            background-color: #e0e0e0;
+        }
+
+        .btn-discrete-pause.paused {
+            background-color: #fff3e0;
+            color: #e65100;
+            border-color: #ffb74d;
+        }
+
+        .btn-discrete-stop {
+            color: #c62828;
+            border-color: #ef9a9a;
+            background-color: #ffebee;
+        }
+        .btn-discrete-stop:hover {
+            background-color: #ffcdd2;
+        }
+
+        .loader-container {
+            display: none;
+            text-align: center;
+            margin: auto;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #ccc;
+            border-top: 5px solid #2e7d32;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            color: #d32f2f;
+            background-color: #ffebee;
+            border: 1px solid #ffcdd2;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            text-align: center;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .node-box {
+            background: white;
+            border-radius: 10px;
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+
+        .node-prev {
+            border-left: 5px solid #9e9e9e;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .node-current {
+            border-left: 5px solid #ff9800;
+            background-color: #fff8e1;
+            border: 2px solid #ffb300;
+        }
+
+        .node-current .node-number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #d84315;
+        }
+
+        .node-next {
+            border-left: 5px solid #4caf50;
+            font-size: 14px;
+            color: #444;
+        }
+
+        .node-number {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .mini-visual {
+            background: #e8f5e9;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            font-size: 13px;
+            margin-bottom: 5px;
+            color: #2e7d32;
+            font-weight: bold;
+        }
+
+        #map {
+            flex: 1;
+            border-radius: 10px;
+            width: 100%;
+            min-height: 250px;
+            z-index: 1;
+        }
+
+        .sim-controls {
+            background: #fff3e0;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            margin-top: 5px;
+            text-align: center;
+            border: 1px solid #ffe0b2;
+        }
+
+        /* Modal Overlays & Styling */
+        .modal-overlay {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.55);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-box {
+            background: white;
+            padding: 18px;
+            border-radius: 14px;
+            width: 82%;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        .poi-page {
+            display: none;
+        }
+        .poi-page.active {
+            display: block;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 8px 0;
+            border-radius: 6px;
+            border: none;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .page-indicator {
+            font-size: 11px;
+            color: #777;
+            text-align: center;
+            margin-top: 5px;
+        }
+    </style>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+</head>
+<body>
+
+<div class="smartphone">
+    <div class="phone-status-bar">
+        <span id="clock">16:43</span>
+        <span>📶 🔋 5G</span>
+    </div>
+
+    <div class="app-content">
+
+        <!-- SCHERM 1: UPLOAD & START -->
+        <div id="screen-upload" class="screen active">
+            <h2>Fiets Knooppunten Opvolger</h2>
+            <p style="font-size: 13px; color: #666; text-align: center;">Upload je GPX-bestand om live te starten.</p>
+            
+            <div id="error-alert" class="error-message">Geen geldig gpx bestand ingeladen.</div>
+
+            <div class="upload-container" style="text-align:center; margin:auto;">
+                <input type="file" id="gpxFile" accept=".gpx" style="display: none;" onchange="handleFileUpload()">
+                <button class="btn btn-secondary" onclick="document.getElementById('gpxFile').click()">📂 Kies GPX Bestand</button>
+                <button class="btn" onclick="loadDemoRoute()">🚲 Gebruik Test-GPX (Demo)</button>
+            </div>
+        </div>
+
+        <!-- LAADSCHERM -->
+        <div id="screen-loader" class="screen">
+            <div class="loader-container" style="display: block; margin: auto;">
+                <div class="spinner"></div>
+                <p>GPX-bestand wordt ingeladen<br>en geoptimaliseerd...</p>
+            </div>
+        </div>
+
+        <!-- SCHERM 2: LIVE OPVOLGING -->
+        <div id="screen-tracking" class="screen">
+            <h2 id="route-title" style="font-size: 14px; margin-bottom: 5px;">Fietstocht: Eerbetoon aan Hugo Bollen</h2>
+            <div id="gps-status" style="font-size: 11px; color: #2e7d32; text-align: center; margin-bottom: 8px;">Status: GPS zoeken...</div>
+
+            <!-- Vorige Knooppunt -->
+            <div class="node-box node-prev">
+                Vorige knooppunt: <span class="node-number" id="prev-node">--</span>
+            </div>
+
+            <!-- Huidig / Te Volgen Knooppunt -->
+            <div class="node-box node-current">
+                <div>HUIDIG (Te volgen):</div>
+                <div class="node-number" id="current-node">--</div>
+                <div style="font-size: 11px; color: #d84315;" id="current-label">🚲 Actief Doel 🚲</div>
+            </div>
+
+            <!-- Volgend Knooppunt -->
+            <div class="node-box node-next">
+                Daarna volgt: <span class="node-number" id="next-node">--</span>
+            </div>
+
+            <div class="mini-visual" id="distance-info">
+                Afstand tot KP: Berekent...
+            </div>
+
+            <button class="btn btn-secondary" style="padding: 10px; margin: 5px 0;" onclick="showMapScreen()">🗺️ Overzicht Kaart</button>
+
+            <!-- PC Test & GPS Simulatie Knoppen -->
+            <div id="sim-controls-box" class="sim-controls">
+                <strong>Simulatie / Test Controls:</strong><br>
+                <button onclick="simulateGPSArrival()" style="margin-top: 4px; padding: 5px 8px; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer;">Simuleer GPS bij KP 📍</button>
+                <button onclick="simulateNextNode()" style="margin-top: 4px; padding: 5px 8px; background: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer;">Handmatig Volgende ➡️</button>
+            </div>
+
+            <!-- Discrete Bedieningsbalk Onderaan -->
+            <div class="bottom-controls-container">
+                <!-- 1. "Wist je dat?" Knop met lichtbol (gloeilamp) icoon -->
+                <button id="btn-poi" class="btn-full-poi" onclick="openPoiModal()">💡 Wist je dat?<br><span style="font-size:11px; font-weight:normal;">Hoe het fietsroute netwerk ontstaan is?</span></button>
+                
+                <!-- 2. Pauze en Stoppen Knoppen -->
+                <div class="discrete-action-bar">
+                    <button id="btn-pause" class="btn-discrete btn-discrete-pause" onclick="togglePauseRoute()">⏸️ Pauze</button>
+                    <button class="btn-discrete btn-discrete-stop" onclick="promptStopRoute()">⏹️ Stoppen</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SCHERM 3: OVERZICHT KAART -->
+        <div id="screen-map" class="screen">
+            <h2>Route Overzicht</h2>
+            <div id="map"></div>
+            <button class="btn" style="margin-top: 10px;" onclick="showTrackingScreen()">❌ Terug naar Opvolging</button>
+        </div>
+
+    </div>
+
+    <!-- MODAL BEVESTIGINGSVENSTER STOPPEN -->
+    <div id="stop-modal" class="modal-overlay">
+        <div class="modal-box" style="text-align: center;">
+            <h3 style="margin-top:0; font-size:16px;">Route Stoppen?</h3>
+            <p style="font-size:13px; color:#555;">Weet je zeker dat je de fietstocht wilt beëindigen?</p>
+            <div class="modal-buttons">
+                <button class="modal-btn" style="background:#ccc;" onclick="closeStopModal()">Nee</button>
+                <button class="modal-btn" style="background:#d32f2f; color:white;" onclick="confirmStopRoute()">Ja, Stop</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL POI HISTORISCHE WEETJES MET PAGINERING -->
+    <div id="poi-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 style="margin-top:0; font-size:15px; color:#0d47a1; text-align:center;">💡 Het Ontstaan van de Fietsknooppunten</h3>
+
+            <!-- PAGINA 1 -->
+            <div id="poi-page-1" class="poi-page active">
+                <p style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:6px;">1. De ondergrondse link (De techniek)</p>
+                <p style="font-size:12px; color:#333; line-height:1.4; margin-top:0;">
+                    <strong>Hugo Bollen</strong> werkte als mijningenieur in de Limburgse steenkoolmijnen. Het idee voor de bovengrondse fietsknooppunten kreeg hij onder de grond.
+                </p>
+                <p style="font-size:12px; color:#333; line-height:1.4;">
+                    In het doolhof van ondergrondse mijngangen gebruikten de mijnwerkers genummerde knooppunten om blindelings de weg te vinden en te communiceren waar de steenkooltreintjes heen moesten.
+                </p>
+                <p style="font-size:12px; color:#333; line-height:1.4;">
+                    Bollen dacht: <em>“Als dit werkt om mijnwerkers ondergronds te gidsen, waarom dan niet om fietsers bovengronds langs mooie paadjes te sturen?”</em>
+                </p>
+            </div>
+
+            <!-- PAGINA 2 -->
+            <div id="poi-page-2" class="poi-page">
+                <p style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:6px;">2. De anekdote van de echtgenote (Waarom nummers?)</p>
+                <p style="font-size:12px; color:#333; line-height:1.4; margin-top:0;">
+                    Het grappige verhaal achter het succes van het netwerk is te danken aan de vrouw van Hugo. Oorspronkelijk was Hugo Bollen van plan om thematische, uitgeschreven routes te maken met namen en pijlen.
+                </p>
+                <p style="font-size:12px; color:#333; line-height:1.4;">
+                    Toen hij de allereerste testroutes op papier uittekende en met zijn vrouw ging proeffietsen, raakten ze constant de weg kwijt omdat de geschreven instructies te ingewikkeld waren.
+                </p>
+                <p style="font-size:12px; color:#333; line-height:1.4;">
+                    Zijn vrouw merkte gefrustreerd op: <em>“Hugo, dit werkt niet. Het moet veel simpeler. Als we nu eens gewoon van nummer naar nummer kunnen fietsen?”</em> Hugo herinnerde zich zijn mijnsysteem, verving de namen door simpele cijfers en de rest is geschiedenis!
+                </p>
+            </div>
+
+            <div class="page-indicator" id="poi-page-indicator">Pagina 1 van 2</div>
+
+            <div class="modal-buttons">
+                <button id="btn-poi-prev" class="modal-btn" style="background:#e0e0e0; display:none;" onclick="changePoiPage(-1)">⬅️ Vorige</button>
+                <button id="btn-poi-next" class="modal-btn" style="background:#1976d2; color:white;" onclick="changePoiPage(1)">Volgende ➡️</button>
+                <button class="modal-btn" style="background:#424242; color:white;" onclick="closePoiModal()">Sluiten</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let routeKnooppunten = [
+        { num: "01", lat: 51.0850, lon: 5.5100 },
+        { num: "02", lat: 51.0950, lon: 5.5250 },
+        { num: 32,   lat: 51.1050, lon: 5.5400 },
+        { num: 33,   lat: 51.1150, lon: 5.5300 },
+        { num: "04", lat: 51.1000, lon: 5.5000 },
+        { num: "03", lat: 51.0900, lon: 5.4850 },
+        { num: "01", lat: 51.0850, lon: 5.5100 }
+    ];
+    let currentIndex = 0;
+    let isFinished = false;
+    let isPaused = false;
+    let watchId = null;
+    let currentPos = { lat: 51.0850, lon: 5.5100 };
+    let spokenNearCurrent = false;
+    let currentPoiPage = 1;
+
+    let map = null;
+    let userMarker = null;
+    let routePolyline = null;
+
+    function isMobileDevice() {
+        const userAgentMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const hasTouchHardware = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        return userAgentMobile || (hasTouchHardware && window.innerWidth <= 800);
+    }
+
+    function speak(text, forceImmediate = false) {
+        if ('speechSynthesis' in window) {
+            if (forceImmediate) {
+                window.speechSynthesis.cancel();
+            }
+            setTimeout(() => {
+                let utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'nl-NL';
+                utterance.rate = 1.0;
+                window.speechSynthesis.speak(utterance);
+            }, forceImmediate ? 150 : 0);
+        }
+    }
+
+    function togglePauseRoute() {
+        isPaused = !isPaused;
+        const pauseBtn = document.getElementById('btn-pause');
+
+        if (isPaused) {
+            pauseBtn.innerText = "▶️ Hervat";
+            pauseBtn.classList.add('paused');
+            document.getElementById('distance-info').innerText = "⏸️ Route gepauzeerd (vrij navigeren)";
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        } else {
+            pauseBtn.innerText = "⏸️ Pauze";
+            pauseBtn.classList.remove('paused');
+            checkUserProgress();
+        }
+    }
+
+    function handleFileUpload() {
+        const fileInput = document.getElementById('gpxFile');
+        const errorAlert = document.getElementById('error-alert');
+        
+        if (fileInput.files.length === 0) return;
+
+        const file = fileInput.files[0];
+        errorAlert.style.display = 'none';
+
+        const reader = new FileReader();
+        document.getElementById('screen-upload').classList.remove('active');
+        document.getElementById('screen-loader').classList.add('active');
+
+        reader.onload = function(e) {
+            let isValid = parseGPX(e.target.result);
+            
+            setTimeout(() => {
+                document.getElementById('screen-loader').classList.remove('active');
+                
+                if (isValid) {
+                    document.getElementById('route-title').innerText = "Fietstocht: " + file.name.replace('.gpx', '');
+                    startTrackingView();
+                } else {
+                    errorAlert.style.display = 'block';
+                    document.getElementById('screen-upload').classList.add('active');
+                    fileInput.value = "";
+                }
+            }, 1000);
+        };
+        reader.readAsText(file);
+    }
+
+    function loadDemoRoute() {
+        document.getElementById('error-alert').style.display = 'none';
+        document.getElementById('route-title').innerText = "Fietstocht: Eerbetoon aan Hugo Bollen";
+        
+        routeKnooppunten = [
+            { num: "01", lat: 51.0850, lon: 5.5100 },
+            { num: "02", lat: 51.0950, lon: 5.5250 },
+            { num: 32,   lat: 51.1050, lon: 5.5400 },
+            { num: 33,   lat: 51.1150, lon: 5.5300 },
+            { num: "04", lat: 51.1000, lon: 5.5000 },
+            { num: "03", lat: 51.0900, lon: 5.4850 },
+            { num: "01", lat: 51.0850, lon: 5.5100 }
+        ];
+
+        document.getElementById('screen-upload').classList.remove('active');
+        document.getElementById('screen-loader').classList.add('active');
+
+        setTimeout(() => {
+            currentIndex = 0;
+            isFinished = false;
+            isPaused = false;
+            spokenNearCurrent = false;
+            document.getElementById('screen-loader').classList.remove('active');
+            startTrackingView();
+        }, 1500);
+    }
+
+    function parseGPX(xmlString) {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+        
+        const parserError = xmlDoc.querySelector("parsererror");
+        const gpxRoot = xmlDoc.querySelector("gpx");
+        if (parserError || !gpxRoot) return false;
+
+        let extractedNodes = [];
+        let firstWaypointCoords = null;
+
+        const points = xmlDoc.querySelectorAll("wpt, rtept");
+        points.forEach((point, index) => {
+            let name = point.querySelector("name") ? point.querySelector("name").textContent : "";
+            let desc = point.querySelector("desc") ? point.querySelector("desc").textContent : "";
+            let lat = parseFloat(point.getAttribute("lat"));
+            let lon = parseFloat(point.getAttribute("lon"));
+            
+            let combinedText = name + " " + desc;
+            let matches = combinedText.match(/\d+/g);
+
+            if (matches && matches.length > 0 && !isNaN(lat) && !isNaN(lon)) {
+                let startNum = matches[0];
+
+                if (index === 0) {
+                    firstWaypointCoords = { lat: lat, lon: lon };
+                }
+
+                if (extractedNodes.length === 0 || extractedNodes[extractedNodes.length - 1].num !== startNum) {
+                    extractedNodes.push({ num: startNum, lat: lat, lon: lon });
+                }
+
+                if (index === points.length - 1 && matches.length > 1) {
+                    let endNum = matches[1];
+                    let endLat = firstWaypointCoords ? firstWaypointCoords.lat : lat;
+                    let endLon = firstWaypointCoords ? firstWaypointCoords.lon : lon;
+
+                    if (extractedNodes[extractedNodes.length - 1].num !== endNum) {
+                        extractedNodes.push({ num: endNum, lat: endLat, lon: endLon });
+                    }
+                }
+            }
+        });
+
+        if (extractedNodes.length === 0) return false;
+
+        routeKnooppunten = extractedNodes;
+        currentIndex = 0;
+        isFinished = false;
+        isPaused = false;
+        return true;
+    }
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371e3;
+        const φ1 = lat1 * Math.PI/180;
+        const φ2 = lat2 * Math.PI/180;
+        const Δφ = (lat2-lat1) * Math.PI/180;
+        const Δλ = (lon2-lon1) * Math.PI/180;
+
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    function startTrackingView() {
+        document.getElementById('screen-tracking').classList.add('active');
+        
+        const simBox = document.getElementById('sim-controls-box');
+        if (isMobileDevice()) {
+            if (simBox) simBox.style.display = 'none';
+        } else {
+            if (simBox) simBox.style.display = 'block';
+        }
+
+        isPaused = false;
+        const pauseBtn = document.getElementById('btn-pause');
+        pauseBtn.innerText = "⏸️ Pauze";
+        pauseBtn.classList.remove('paused');
+
+        document.getElementById('btn-poi').style.display = 'none';
+
+        updateNodesDisplay();
+        initMap();
+        startGPS();
+    }
+
+    function initMap() {
+        if (!map) {
+            map = L.map('map').setView([currentPos.lat, currentPos.lon], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(map);
+        } else {
+            map.invalidateSize();
+        }
+
+        updateMapElements();
+    }
+
+    function updateMapElements() {
+        if (!map) return;
+
+        if (routePolyline) map.removeLayer(routePolyline);
+        if (userMarker) map.removeLayer(userMarker);
+
+        let latLngs = routeKnooppunten.map(node => [node.lat, node.lon]);
+        
+        routePolyline = L.polyline(latLngs, { color: '#1976d2', weight: 4, opacity: 0.7 }).addTo(map);
+
+        userMarker = L.marker([currentPos.lat, currentPos.lon]).addTo(map)
+            .bindPopup("Jouw live positie")
+            .openPopup();
+
+        if (latLngs.length > 0) {
+            map.fitBounds(routePolyline.getBounds(), { padding: [30, 30] });
+        }
+    }
+
+    function startGPS() {
+        const statusElem = document.getElementById('gps-status');
+
+        if ("geolocation" in navigator) {
+            if (isMobileDevice()) {
+                statusElem.innerText = "Status: GPS Verbonden & Actief";
+            } else {
+                statusElem.innerText = "GPS-fout op dit toestel (gebruik simulatieknoppen)";
+            }
+
+            watchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    currentPos.lat = position.coords.latitude;
+                    currentPos.lon = position.coords.longitude;
+                    if (isMobileDevice()) {
+                        statusElem.innerText = "Status: GPS Verbonden & Actief";
+                    }
+                    checkUserProgress();
+                },
+                (error) => {
+                    statusElem.innerText = "GPS-fout op dit toestel (gebruik simulatieknoppen)";
+                },
+                { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
+            );
+        } else {
+            statusElem.innerText = "GPS-fout op dit toestel (gebruik simulatieknoppen)";
+        }
+    }
+
+    function checkUserProgress() {
+        if (isFinished || isPaused) return;
+
+        let currentNode = routeKnooppunten[currentIndex];
+        if (!currentNode) return;
+
+        let distanceMeters = calculateDistance(currentPos.lat, currentPos.lon, currentNode.lat, currentNode.lon);
+        let distText = distanceMeters > 1000 ? (distanceMeters / 1000).toFixed(1) + " km" : Math.round(distanceMeters) + " m";
+        
+        document.getElementById('distance-info').innerText = `Nog te fietsen naar KP ${currentNode.num}: ${distText}`;
+
+        if (userMarker && map) {
+            userMarker.setLatLng([currentPos.lat, currentPos.lon]);
+        }
+
+        if (distanceMeters < 100 && !spokenNearCurrent) {
+            spokenNearCurrent = true;
+            let nextNode = routeKnooppunten[currentIndex + 1];
+            
+            if (nextNode) {
+                speak(`Huidig knooppunt bijna bereikt. Het volgende knooppunt is ${nextNode.num}.`);
+            } else {
+                speak("Huidig knooppunt bijna bereikt. Het volgende knooppunt is het eindpunt.");
+            }
+        }
+
+        if (distanceMeters < 30) {
+            progressToNextNode();
+        }
+    }
+
+    function progressToNextNode() {
+        if (currentIndex < routeKnooppunten.length - 1) {
+            currentIndex++;
+            spokenNearCurrent = false;
+            updateNodesDisplay();
+        } else {
+            isFinished = true;
+            updateNodesDisplay();
+            speak("Het eindpunt is bereikt. De fietstocht is voltooid.", true);
+            document.getElementById('route-title').innerText = "Fietstocht: Voltooid 🏁";
+        }
+    }
+
+    function updateNodesDisplay() {
+        if (isFinished) {
+            let lastNode = routeKnooppunten[routeKnooppunten.length - 1];
+            document.getElementById('prev-node').innerText = lastNode ? lastNode.num : "01";
+            document.getElementById('current-node').innerText = "FINISH 🏁";
+            document.getElementById('current-label').innerText = "🎉 Route Voltooid 🎉";
+            document.getElementById('next-node').innerText = "---";
+            document.getElementById('distance-info').innerText = "Einde fietstocht bereikt!";
+            
+            document.getElementById('btn-poi').style.display = 'block';
+            return;
+        }
+
+        let prev = currentIndex > 0 ? routeKnooppunten[currentIndex - 1] : null;
+        let curr = routeKnooppunten[currentIndex];
+        let next = routeKnooppunten[currentIndex + 1];
+
+        document.getElementById('prev-node').innerText = prev ? prev.num : "Startpunt";
+        document.getElementById('current-node').innerText = curr ? curr.num : "--";
+        document.getElementById('current-label').innerText = "🚲 Actief Doel 🚲";
+        document.getElementById('next-node').innerText = next ? next.num : "Eindpunt";
+
+        if (curr && !isPaused) {
+            let distanceMeters = calculateDistance(currentPos.lat, currentPos.lon, curr.lat, curr.lon);
+            let distText = distanceMeters > 1000 ? (distanceMeters / 1000).toFixed(1) + " km" : Math.round(distanceMeters) + " m";
+            document.getElementById('distance-info').innerText = `Nog te fietsen naar KP ${curr.num}: ${distText}`;
+        }
+    }
+
+    function simulateGPSArrival() {
+        if (isFinished || isPaused) return;
+        let curr = routeKnooppunten[currentIndex];
+        if (curr) {
+            currentPos.lat = curr.lat;
+            currentPos.lon = curr.lon;
+            checkUserProgress();
+        }
+    }
+
+    function simulateNextNode() {
+        if (isFinished || isPaused) return;
+        
+        if (currentIndex < routeKnooppunten.length - 1) {
+            currentIndex++;
+            spokenNearCurrent = false;
+            updateNodesDisplay();
+            let curr = routeKnooppunten[currentIndex];
+            if(curr) {
+                currentPos.lat = curr.lat;
+                currentPos.lon = curr.lon;
+                checkUserProgress();
+            }
+        } else {
+            isFinished = true;
+            updateNodesDisplay();
+            speak("Het eindpunt is bereikt. De fietstocht is voltooid.", true);
+            document.getElementById('route-title').innerText = "Fietstocht: Voltooid 🏁";
+        }
+    }
+
+    function promptStopRoute() {
+        document.getElementById('stop-modal').style.display = 'flex';
+    }
+
+    function closeStopModal() {
+        document.getElementById('stop-modal').style.display = 'none';
+    }
+
+    /* POI Modal Paginering Logica */
+    function openPoiModal() {
+        currentPoiPage = 1;
+        updatePoiPage();
+        document.getElementById('poi-modal').style.display = 'flex';
+    }
+
+    function closePoiModal() {
+        document.getElementById('poi-modal').style.display = 'none';
+    }
+
+    function changePoiPage(delta) {
+        currentPoiPage += delta;
+        if (currentPoiPage < 1) currentPoiPage = 1;
+        if (currentPoiPage > 2) currentPoiPage = 2;
+        updatePoiPage();
+    }
+
+    function updatePoiPage() {
+        document.getElementById('poi-page-1').classList.toggle('active', currentPoiPage === 1);
+        document.getElementById('poi-page-2').classList.toggle('active', currentPoiPage === 2);
+        
+        document.getElementById('poi-page-indicator').innerText = `Pagina ${currentPoiPage} van 2`;
+
+        document.getElementById('btn-poi-prev').style.display = currentPoiPage === 1 ? 'none' : 'block';
+        document.getElementById('btn-poi-next').style.display = currentPoiPage === 2 ? 'none' : 'block';
+    }
+
+    function confirmStopRoute() {
+        closeStopModal();
+        if (watchId) {
+            navigator.geolocation.clearWatch(watchId);
+            watchId = null;
+        }
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
+        isFinished = false;
+        isPaused = false;
+        currentIndex = 0;
+        
+        document.getElementById('btn-poi').style.display = 'none';
+        document.getElementById('screen-tracking').classList.remove('active');
+        document.getElementById('screen-map').classList.remove('active');
+        document.getElementById('screen-upload').classList.add('active');
+        document.getElementById('gpxFile').value = "";
+    }
+
+    function showMapScreen() {
+        document.getElementById('screen-tracking').classList.remove('active');
+        document.getElementById('screen-map').classList.add('active');
+        setTimeout(() => {
+            if (map) map.invalidateSize();
+        }, 100);
+    }
+
+    function showTrackingScreen() {
+        document.getElementById('screen-map').classList.remove('active');
+        document.getElementById('screen-tracking').classList.add('active');
+    }
+</script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js')
+        .then((registration) => {
+          console.log('ServiceWorker geregistreerd met succes: ', registration.scope);
+        })
+        .catch((error) => {
+          console.log('ServiceWorker registratie mislukt: ', error);
+        });
+    });
+  }
+</script>
+
+</body>
+</html>

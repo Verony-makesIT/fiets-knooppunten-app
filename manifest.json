@@ -1,0 +1,51 @@
+{
+  "name": "Fiets Knooppunten App",
+  "short_name": "Knooppunten",
+  "description": "Live GPS fietstocht opvolger voor knooppunten met GPX ondersteuning.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2e7d32",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+  "screenshots": [
+    {
+      "src": "screenshots/screenshot001.png",
+      "sizes": "311x596",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Keuzescherm GPX bestand uploaden"
+    },
+    {
+      "src": "screenshots/screenshot002.png",
+      "sizes": "311x597",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Het homescherm met de knooppunten"
+    },
+    {
+      "src": "screenshots/screenshot003.png",
+      "sizes": "309x597",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "De routekaart in portrait modus"
+    },
+        {
+      "src": "screenshots/screenshot004.png",
+      "sizes": "310x596",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Finnish scherm en Info (Weetje)van de knooppunten"
+    }
+  ]
+}
