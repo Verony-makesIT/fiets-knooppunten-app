@@ -530,42 +530,34 @@
     // Wake Lock alleen actief houden zolang een fietstocht loopt en niet gepauzeerd is.
     // De browser vereist doorgaans een zichtbare pagina en een veilige context (HTTPS).
     async function requestWakeLock() {
-        if (!isTrackingActive || isPaused || isFinished || document.visibilityState !== 'visible') {
-            return;
-        }
-
-        // Voorkom dubbele aanvragen en behoud een nog actieve Wake Lock.
-        if (wakeLock && !wakeLock.released) return;
-        if (wakeLockRequestInProgress) return;
         if (!('wakeLock' in navigator)) {
-            console.warn('Screen Wake Lock wordt niet ondersteund door deze browser.');
-            return;
+            console.warn('Wake Lock wordt niet ondersteund.');
+            return false;
         }
 
-        wakeLockRequestInProgress = true;
+        if (document.visibilityState !== 'visible') {
+            return false;
+        }
+
+        // Voorkom dubbele aanvragen.
+        if (wakeLock && !wakeLock.released) {
+            return true;
+        }
+
         try {
-            const sentinel = await navigator.wakeLock.request('screen');
+            wakeLock = await navigator.wakeLock.request('screen');
 
-            // De route kan beëindigd/gepauzeerd zijn terwijl de aanvraag wachtte.
-            if (!isTrackingActive || isPaused || isFinished || document.visibilityState !== 'visible') {
-                await sentinel.release();
-                return;
-            }
+            console.log('Scherm actief houden: ingeschakeld');
 
-            wakeLock = sentinel;
-            console.log('Scherm blijft actief (Wake Lock ingeschakeld)');
-
-            sentinel.addEventListener('release', () => {
-                // Wis alleen de referentie van precies deze Wake Lock.
-                if (wakeLock === sentinel) wakeLock = null;
-                console.log('Wake Lock is vrijgegeven');
-                // Opnieuw aanvragen gebeurt bij terugkeer naar de zichtbare app,
-                // of wanneer de gebruiker de route hervat.
+            wakeLock.addEventListener('release', () => {
+                console.log('Schermslot vrijgegeven door browser of systeem');
             }, { once: true });
+
+            return true;
         } catch (err) {
-            console.warn(`Wake Lock kon niet worden ingeschakeld: ${err.name}: ${err.message}`);
-        } finally {
-            wakeLockRequestInProgress = false;
+            wakeLock = null;
+            console.warn('Wake Lock niet beschikbaar:', err.name, err.message);
+            return false;
         }
     }
 
@@ -584,11 +576,16 @@
     }
 
     // Vraag opnieuw aan wanneer de gebruiker terugkeert naar de zichtbare app.
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            if (isTrackingActive && !isPaused && !isFinished) {
-                requestWakeLock();
-            }
+    document.addEventListener('visibilitychange', async () => {
+        const routeActive =
+            watchId !== null &&
+            !isFinished;
+
+        if (
+            routeActive &&
+            document.visibilityState === 'visible'
+        ) {
+            await requestWakeLock();
         }
     });
 
@@ -824,33 +821,83 @@
         }
     }
 
+
     function startGPS() {
         const statusElem = document.getElementById('gps-status');
 
-        if ("geolocation" in navigator) {
-            if (isMobileDevice()) {
-                statusElem.innerText = "Status: GPS Verbonden & Actief";
-            } else {
-                statusElem.innerText = "GPS-fout op dit toestel (gebruik simulatieknoppen)";
-            }
-
-            watchId = navigator.geolocation.watchPosition(
-                (position) => {
-                    currentPos.lat = position.coords.latitude;
-                    currentPos.lon = position.coords.longitude;
-                    if (isMobileDevice()) {
-                        statusElem.innerText = "Status: GPS Verbonden & Actief";
-                    }
-                    checkUserProgress();
-                },
-                (error) => {
-                    statusElem.innerText = "GPS-fout op dit toestel (gebruik simulatieknoppen)";
-                },
-                { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
-            );
-        } else {
-            statusElem.innerText = "GPS-fout op dit toestel (gebruik simulatieknoppen)";
+        // Voorkom meerdere gelijktijdige GPS-watches.
+        if (watchId !== null && 'geolocation' in navigator) {
+            navigator.geolocation.clearWatch(watchId);
+            watchId = null;
         }
+
+        if (!window.isSecureContext) {
+            statusElem.innerText =
+                'Locatie niet beschikbaar: open de app via HTTPS.';
+            return;
+        }
+
+        if (!('geolocation' in navigator)) {
+            statusElem.innerText =
+                'Deze browser ondersteunt geen locatietoegang.';
+            return;
+        }
+
+        statusElem.innerText = 'Locatie zoeken... Wacht op GPS-signaal.';
+
+        watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                currentPos.lat = position.coords.latitude;
+                currentPos.lon = position.coords.longitude;
+
+                const accuracy = Math.round(position.coords.accuracy);
+
+                statusElem.innerText =
+                    `Locatie ontvangen — nauwkeurigheid ongeveer ±${accuracy} m`;
+
+                // Werk de positie op de kaart bij.
+                if (userMarker && map) {
+                    userMarker.setLatLng([
+                        currentPos.lat,
+                        currentPos.lon
+                    ]);
+                }
+
+                checkUserProgress();
+            },
+
+            (error) => {
+                switch (error.code) {
+                    case 1:
+                        statusElem.innerText =
+                            'Locatietoegang geweigerd. Controleer de browserinstellingen.';
+                        break;
+                    case 2:
+                        statusElem.innerText =
+                            'Locatie momenteel niet beschikbaar. Probeer buiten opnieuw.';
+                        break;
+                    case 3:
+                        statusElem.innerText =
+                            'Locatie zoeken duurt lang. De app blijft verder zoeken.';
+                        break;
+                    default:
+                        statusElem.innerText =
+                            'Onbekende locatiefout. Probeer opnieuw.';
+                }
+
+                console.warn(
+                    'Geolocatiefout:',
+                    error.code,
+                    error.message
+                );
+            },
+
+            {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 20000
+            }
+        );
     }
 
     function checkUserProgress() {
