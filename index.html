@@ -956,6 +956,9 @@
             document.getElementById('distance-info').innerText = "Einde fietstocht bereikt!";
             
             document.getElementById('btn-poi').style.display = 'block';
+
+            // Geef de gesproken aankondiging even tijd voordat een update herlaadt.
+            window.setTimeout(activateWaitingUpdateWhenSafe, 1500);
             return;
         }
 
@@ -1062,6 +1065,9 @@
         document.getElementById('screen-upload').classList.add('active');
         document.getElementById('gpxFile').value = "";
         releaseWakeLock();
+
+        // De fietstocht is expliciet beëindigd: een wachtende update mag nu activeren.
+        activateWaitingUpdateWhenSafe();
     }
 
     function showMapScreen() {
@@ -1079,39 +1085,110 @@
 </script>
 
 <script>
+  // Wordt bijgehouden door de service-worker-updatecode.
+  let fietsAppServiceWorkerRegistration = null;
+  let reloadAfterTripForUpdate = false;
+  let serviceWorkerReloadStarted = false;
+  const hadServiceWorkerControllerAtPageStart =
+    Boolean(navigator.serviceWorker?.controller);
+
+  function isBikeTripInProgressForUpdate() {
+    // Een gepauzeerde tocht telt ook als actief. Een voltooide tocht niet.
+    return (
+      (typeof isTrackingActive !== 'undefined' && isTrackingActive &&
+        !(typeof isFinished !== 'undefined' && isFinished)) ||
+      (typeof isPaused !== 'undefined' && isPaused &&
+        !(typeof isFinished !== 'undefined' && isFinished))
+    );
+  }
+
+  function reloadForServiceWorkerUpdateIfSafe() {
+    if (isBikeTripInProgressForUpdate()) {
+      reloadAfterTripForUpdate = true;
+      return;
+    }
+
+    if (serviceWorkerReloadStarted) return;
+    serviceWorkerReloadStarted = true;
+    window.location.reload();
+  }
+
+  function activateWaitingUpdateWhenSafe() {
+    if (isBikeTripInProgressForUpdate()) return;
+
+    // De worker is al gewisseld, maar we hebben een herlaadbeurt uitgesteld.
+    if (reloadAfterTripForUpdate) {
+      reloadForServiceWorkerUpdateIfSafe();
+      return;
+    }
+
+    const waitingWorker = fietsAppServiceWorkerRegistration?.waiting;
+    if (waitingWorker) {
+      // Alleen aanroepen nadat de tocht is beëindigd of voltooid.
+      waitingWorker.postMessage({ type: 'ACTIVATE_UPDATE_AFTER_TRIP' });
+    }
+  }
+
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', async () => {
       try {
-        const registration =
-          await navigator.serviceWorker.register(
-            './service-worker.js',
-            { updateViaCache: 'none' }
-          );
-
-        // Controleer onmiddellijk op een nieuwe versie.
-        await registration.update();
-
-        console.log('Service worker gecontroleerd.');
-        console.log(
-          'Actief:',
-          registration.active?.scriptURL ?? 'Nog niet actief'
+        const registration = await navigator.serviceWorker.register(
+          './service-worker.js',
+          { updateViaCache: 'none' }
         );
-        console.log(
-          'Wachtend:',
-          registration.waiting?.scriptURL ?? 'Geen update wachtend'
-        );
+        fietsAppServiceWorkerRegistration = registration;
+
+        // Luister vóór de updatecontrole, zodat we een nieuw gevonden worker zien.
+        registration.addEventListener('updatefound', () => {
+          const installingWorker = registration.installing;
+          if (!installingWorker) return;
+
+          installingWorker.addEventListener('statechange', () => {
+            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              activateWaitingUpdateWhenSafe();
+            }
+          });
+        });
+
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          // Bij de allereerste installatie hoeft de pagina niet opnieuw te laden.
+          if (!hadServiceWorkerControllerAtPageStart) return;
+
+          if (isBikeTripInProgressForUpdate()) {
+            reloadAfterTripForUpdate = true;
+            return;
+          }
+
+          reloadForServiceWorkerUpdateIfSafe();
+        });
+
+        console.log('Service worker geregistreerd:', registration.scope);
+
+        // Een update die al wacht, mag meteen activeren als er geen tocht bezig is.
+        if (registration.waiting) {
+          activateWaitingUpdateWhenSafe();
+        }
+
+        // Controleer onmiddellijk op een nieuwe versie. Een netwerkfout mag
+        // de offline-app niet onbruikbaar maken.
+        try {
+          await registration.update();
+          console.log('Service worker-updatecontrole uitgevoerd.');
+          activateWaitingUpdateWhenSafe();
+        } catch (error) {
+          console.info('Updatecontrole niet gelukt; de app kan offline verder werken.', error);
+        }
 
         // Controleer opnieuw wanneer de app terug zichtbaar wordt.
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') {
-            registration.update().catch(console.error);
+            registration.update()
+              .then(() => activateWaitingUpdateWhenSafe())
+              .catch((error) => console.info('Updatecontrole niet gelukt:', error));
           }
         });
       } catch (error) {
-        console.error(
-          'Service-workerregistratie of update mislukt:',
-          error
-        );
+        console.error('Service-workerregistratie mislukt:', error);
       }
     });
   }

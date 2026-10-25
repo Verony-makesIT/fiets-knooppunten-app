@@ -1,21 +1,19 @@
 /*
  * Fiets Knooppunten Opvolger — Service Worker
- * Versie: 3
+ * Versie: 4
  *
  * Updatebeleid:
- * - Geen skipWaiting(): een nieuwe worker wacht totdat de huidige app-client(s)
- *   gesloten zijn. Zo wordt een actieve fietstocht niet middenin vervangen.
- * - Bij activatie worden uitsluitend oude caches van deze app verwijderd.
- * - De kernbestanden zijn vereist; externe Leaflet-bestanden en iconen zijn
- *   optioneel, zodat een tijdelijke netwerkfout de installatie niet blokkeert.
+ * - Een nieuwe worker wacht totdat de huidige fietstocht voorbij is.
+ * - De app vraagt via een bericht om activatie wanneer de tocht eindigt.
+ * - Als de gebruiker de app sluit, kan de wachtende worker daarna normaal activeren.
+ * - Alleen oude caches van deze app worden verwijderd.
  *
- * Bij iedere publicatie van een nieuwe release: verhoog CACHE_NAME.
+ * Verhoog CACHE_NAME bij iedere nieuwe publicatie.
  */
-
 'use strict';
 
 const CACHE_PREFIX = 'fiets-knooppunten-';
-const CACHE_NAME = `${CACHE_PREFIX}v3`;
+const CACHE_NAME = `${CACHE_PREFIX}v4`;
 
 const CORE_ASSETS = [
   './index.html',
@@ -34,16 +32,12 @@ self.addEventListener('install', (event) => {
     const cache = await caches.open(CACHE_NAME);
 
     // De kernbestanden zijn vereist voor de offline-appshell.
-    // Als deze niet beschikbaar zijn, mislukt de installatie.
-    // De vorige actieve worker blijft dan behouden.
     await cache.addAll(CORE_ASSETS);
 
-    // Optionele bestanden: een netwerkfout of ontbrekend icoon
-    // mag de installatie van de nieuwe service worker niet blokkeren.
+    // Optionele bestanden mogen een installatie niet blokkeren.
     await Promise.all(OPTIONAL_ASSETS.map(async (url) => {
       try {
         const response = await fetch(url, { cache: 'reload' });
-
         if (
           response.ok &&
           (response.type === 'basic' || response.type === 'cors')
@@ -65,13 +59,22 @@ self.addEventListener('install', (event) => {
       }
     }));
 
-    // Geen skipWaiting(): bestaande app-clients krijgen de tijd
-    // om af te sluiten voordat deze worker de oude vervangt.
+    // Geen skipWaiting(): de app beslist wanneer de tocht voorbij is.
     console.info(
-      '[Fietsapp SW] Nieuwe versie geïnstalleerd; wacht op activatie:',
+      '[Fietsapp SW] Nieuwe versie geïnstalleerd en wacht op activatie:',
       CACHE_NAME
     );
   })());
+});
+
+// Alleen de pagina mag na het beëindigen van de fietstocht om activatie vragen.
+self.addEventListener('message', (event) => {
+  if (
+    event.data &&
+    event.data.type === 'ACTIVATE_UPDATE_AFTER_TRIP'
+  ) {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (event) => {
@@ -79,14 +82,11 @@ self.addEventListener('activate', (event) => {
     const cacheNames = await caches.keys();
 
     await Promise.all(cacheNames.map(async (cacheName) => {
-      // Verwijder uitsluitend oude caches van deze fietsapp.
-      // Caches van andere apps op hetzelfde domein blijven behouden.
       if (
         cacheName.startsWith(CACHE_PREFIX) &&
         cacheName !== CACHE_NAME
       ) {
         await caches.delete(cacheName);
-
         console.info(
           '[Fietsapp SW] Oude cache verwijderd:',
           cacheName
@@ -94,9 +94,7 @@ self.addEventListener('activate', (event) => {
       }
     }));
 
-    // De nieuwe worker mag nu clients binnen zijn scope bedienen.
     await self.clients.claim();
-
     console.info('[Fietsapp SW] Actief:', CACHE_NAME);
   })());
 });
@@ -104,48 +102,35 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
-  // Alleen GET-verzoeken afhandelen.
   if (request.method !== 'GET') return;
 
   const requestURL = new URL(request.url);
   const isSameOrigin = requestURL.origin === self.location.origin;
 
-  // Alleen de vooraf gecachete Leaflet-bestanden van deze CDN meenemen.
   const isLeafletAsset =
     requestURL.origin === 'https://unpkg.com' &&
     /^\/leaflet@1\.9\.4\/dist\/leaflet\.(css|js)$/.test(
       requestURL.pathname
     );
 
-  // Andere externe diensten, zoals OpenStreetMap-tegels,
-  // blijven buiten deze cachelogica.
+  // Andere externe diensten, waaronder kaarttegels, vallen buiten deze cache.
   if (!isSameOrigin && !isLeafletAsset) return;
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-
-    // Gebruik eerst de bestanden uit de cache van deze versie.
     const cachedResponse = await cache.match(request);
 
-    if (cachedResponse) {
-      return cachedResponse;
-    }
+    if (cachedResponse) return cachedResponse;
 
     try {
-      // Bestand staat niet in de cache: probeer het netwerk.
       return await fetch(request);
     } catch (error) {
-      // Bij offline navigatie de opgeslagen app tonen.
       if (request.mode === 'navigate') {
         const appShell = await cache.match('./index.html');
 
-        if (appShell) {
-          return appShell;
-        }
+        if (appShell) return appShell;
       }
 
-      // Geef een duidelijke fout als het bestand offline
-      // niet beschikbaar is.
       return new Response(
         'Je bent offline en dit bestand staat niet in de cache.',
         {
