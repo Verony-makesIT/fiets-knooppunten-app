@@ -515,6 +515,9 @@
     let isFinished = false;
     let isPaused = false;
     let isDemoMode = false; // Houdt bij of we in demo-modus zitten
+    let wakeLock = null;
+    let wakeLockRequestInProgress = false;
+    let isTrackingActive = false;
     let watchId = null;
     let currentPos = { lat: 51.0850, lon: 5.5100 };
     let spokenNearCurrent = false;
@@ -523,6 +526,76 @@
     let map = null;
     let userMarker = null;
     let routePolyline = null;
+
+    // Wake Lock alleen actief houden zolang een fietstocht loopt en niet gepauzeerd is.
+    // De browser vereist doorgaans een zichtbare pagina en een veilige context (HTTPS).
+    async function requestWakeLock() {
+        if (!isTrackingActive || isPaused || isFinished || document.visibilityState !== 'visible') {
+            return;
+        }
+
+        // Voorkom dubbele aanvragen en behoud een nog actieve Wake Lock.
+        if (wakeLock && !wakeLock.released) return;
+        if (wakeLockRequestInProgress) return;
+        if (!('wakeLock' in navigator)) {
+            console.warn('Screen Wake Lock wordt niet ondersteund door deze browser.');
+            return;
+        }
+
+        wakeLockRequestInProgress = true;
+        try {
+            const sentinel = await navigator.wakeLock.request('screen');
+
+            // De route kan beëindigd/gepauzeerd zijn terwijl de aanvraag wachtte.
+            if (!isTrackingActive || isPaused || isFinished || document.visibilityState !== 'visible') {
+                await sentinel.release();
+                return;
+            }
+
+            wakeLock = sentinel;
+            console.log('Scherm blijft actief (Wake Lock ingeschakeld)');
+
+            sentinel.addEventListener('release', () => {
+                // Wis alleen de referentie van precies deze Wake Lock.
+                if (wakeLock === sentinel) wakeLock = null;
+                console.log('Wake Lock is vrijgegeven');
+                // Opnieuw aanvragen gebeurt bij terugkeer naar de zichtbare app,
+                // of wanneer de gebruiker de route hervat.
+            }, { once: true });
+        } catch (err) {
+            console.warn(`Wake Lock kon niet worden ingeschakeld: ${err.name}: ${err.message}`);
+        } finally {
+            wakeLockRequestInProgress = false;
+        }
+    }
+
+    // Geef het scherm-slot vrij bij pauzeren, voltooien of stoppen.
+    async function releaseWakeLock() {
+        const lockToRelease = wakeLock;
+        wakeLock = null;
+        if (!lockToRelease) return;
+
+        try {
+            await lockToRelease.release();
+            console.log('Wake Lock uitgeschakeld');
+        } catch (err) {
+            console.warn(`Wake Lock kon niet netjes worden vrijgegeven: ${err.name}: ${err.message}`);
+        }
+    }
+
+    // Vraag opnieuw aan wanneer de gebruiker terugkeert naar de zichtbare app.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            if (isTrackingActive && !isPaused && !isFinished) {
+                requestWakeLock();
+            }
+        }
+    });
+
+    // Sommige mobiele browsers melden terugkeer via pageshow (o.a. vanuit de back-forward cache).
+    window.addEventListener('pageshow', () => {
+        if (isTrackingActive && !isPaused && !isFinished) requestWakeLock();
+    });
 
     function isMobileDevice() {
         const userAgentMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -553,9 +626,11 @@
             pauseBtn.classList.add('paused');
             document.getElementById('distance-info').innerText = "⏸️ Route gepauzeerd (vrij navigeren)";
             if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            releaseWakeLock();
         } else {
             pauseBtn.innerText = "⏸️ Pauze";
             pauseBtn.classList.remove('paused');
+            requestWakeLock();
             checkUserProgress();
         }
     }
@@ -690,6 +765,8 @@
     }
 
     function startTrackingView() {
+        isTrackingActive = true;
+        isFinished = false;
         document.getElementById('screen-tracking').classList.add('active');
         
         const simBox = document.getElementById('sim-controls-box');
@@ -711,6 +788,7 @@
         updateNodesDisplay();
         initMap();
         startGPS();
+        requestWakeLock();
     }
 
     function initMap() {
@@ -821,6 +899,8 @@
 
     function updateNodesDisplay() {
         if (isFinished) {
+            isTrackingActive = false;
+            releaseWakeLock();
             let lastNode = routeKnooppunten[routeKnooppunten.length - 1];
             document.getElementById('prev-node').innerText = lastNode ? lastNode.num : "01";
             document.getElementById('current-node').innerText = "FINISH 🏁";
@@ -926,6 +1006,7 @@
         }
         isFinished = false;
         isPaused = false;
+        isTrackingActive = false;
         currentIndex = 0;
         
         document.getElementById('btn-poi').style.display = 'none';
@@ -933,6 +1014,7 @@
         document.getElementById('screen-map').classList.remove('active');
         document.getElementById('screen-upload').classList.add('active');
         document.getElementById('gpxFile').value = "";
+        releaseWakeLock();
     }
 
     function showMapScreen() {
@@ -951,14 +1033,29 @@
 
 <script>
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js')
-        .then((registration) => {
-          console.log('ServiceWorker geregistreerd met succes: ', registration.scope);
-        })
-        .catch((error) => {
-          console.log('ServiceWorker registratie mislukt: ', error);
+    window.addEventListener('load', async () => {
+      try {
+        const registration = await navigator.serviceWorker.register(
+          './service-worker.js',
+          { updateViaCache: 'none' }
+        );
+
+        // Controleer onmiddellijk of er een nieuwe versie beschikbaar is.
+        await registration.update();
+
+        // Controleer opnieuw wanneer de gebruiker terugkeert naar de app.
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            registration.update().catch(console.error);
+          }
         });
+
+        console.log('Service worker geregistreerd:', registration.scope);
+        console.log('Actieve versie:', registration.active?.scriptURL);
+        console.log('Wachtende update:', registration.waiting?.scriptURL ?? 'Geen');
+      } catch (error) {
+        console.error('Service-workerregistratie of updatecontrole mislukt:', error);
+      }
     });
   }
 </script>
