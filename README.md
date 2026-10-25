@@ -50,10 +50,10 @@ De app is live te gebruiken via GitHub Pages:
 
 ## 🔒 Privacy & Locatievoorzieningen (GPS)
 
-Wanneer je de app voor het eerst opent, zal de browser om toestemming vragen voor je **locatievoorzieningen (GPS)**. 
+Wanneer je de app voor het eerst gebruikt om een fietstocht te volgen, kan de browser om toestemming voor je **locatievoorzieningen (GPS)** vragen.
 
-* **Waarom vereist?** De app gebruikt de *Geolocation API* om live te bepalen waar je fietst, de afstand tot het volgende knooppunt te berekenen en de gesproken instructies op het juiste moment af te spelen.
-* **Privacy:** Alle GPS-data wordt uitsluitend lokaal op je smartphone verwerkt en wordt **nooit** opgeslagen of gedeeld met externe servers.
+- **Waarom is dit nodig?** De app gebruikt de *Geolocation API* om je actuele positie te bepalen, je afstand tot het volgende fietsknooppunt te berekenen en gesproken aanwijzingen op het juiste moment af te spelen.
+- **Moet je toestemming geven?** Voor live GPS-navigatie wel. Als je geen toestemming geeft, of je locatie niet beschikbaar is, kan de app je voortgang niet automatisch volgen. De app zelf kan wel openen en andere functies kunnen beschikbaar blijven.
 
 ---
 
